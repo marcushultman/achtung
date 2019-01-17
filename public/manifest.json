@@ -1,6 +1,14 @@
 {
   "name": "achtung",
   "short_name": "achtung",
+  "share_target": {
+    "action": "/",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "./img/icons/android-chrome-192x192.png",
