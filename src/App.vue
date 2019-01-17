@@ -5,6 +5,11 @@
 </template>
 
 <style>
+html, body {
+  margin: 0;
+  overscroll-behavior: none;
+  user-select: none;
+}
 #app {
   font-family: 'Avenir', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
