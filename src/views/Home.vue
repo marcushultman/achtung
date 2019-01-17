@@ -18,7 +18,7 @@
 </template>
 
 <script>
-import client from '../network/client';
+import Client from '../network/client';
 import Configuration from '@/components/Configuration.vue'
 
 export default {
@@ -40,7 +40,7 @@ export default {
       if (!this.config) {
         return;
       }
-      return Object.values(this.config.items).find(item => item.id === client.id) || null;
+      return Object.values(this.config.items).find(item => item.id === this.client.id) || null;
     },
     background() {
       const item = this.configItem;
@@ -70,11 +70,11 @@ export default {
     },
   },
   mounted() {
-    const handle = this.clientHandle = client.createHandle();
-    client.onConnected(handle, id => this.id = id);
-    client.onPeerJoin(handle, peer => this.onPeerJoin(peer));
-    client.onPeerLeft(handle, peer => this.onPeerLeft(peer));
-    client.on(handle, 'config', ({ event, payload }) => {
+    this.client = new Client();
+    this.client.onConnected(id => this.id = id);
+    this.client.onPeerJoin(peer => this.onPeerJoin(peer));
+    this.client.onPeerLeft(peer => this.onPeerLeft(peer));
+    this.client.on('config', ({ event, payload }) => {
       this.$refs.config.onEvent(event, payload);
     });
 
@@ -82,11 +82,11 @@ export default {
     window.onresize = () => this.updateSizes();
   },
   beforeDestroy() {
-    client.releaseHandle(this.clientHandle);
+    delete this.client;
   },
   methods: {
     send(type, payload) {
-      client.send(type, payload);
+      this.client.send(type, payload);
     },
     updateSizes() {
       this.width = window.innerWidth;
