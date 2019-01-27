@@ -1,11 +1,11 @@
 <template>
-  <div class="configuration"
+  <div class="configuration" ref="configuration"
       @touchstart="touchstart"
       @touchend="touchend"
       @touchcancel="touchend"
       @touchmove="touchmove">
     <canvas ref="canvas" :width="width" :height="height"></canvas>
-    <div class="glow" :style="glowStyle"></div>
+    <div class="arrow" :style="arrowStyle">&rarr;</div>
   </div>
 </template>
 
@@ -23,7 +23,6 @@ function findTouch(e, id) {
       return touch;
     }
   }
-  return null;
 }
 
 export default {
@@ -32,27 +31,38 @@ export default {
       type: String,
       required: true
     },
-    width: Number,
-    height: Number,
+    threshold: {
+      type: Number,
+      default: 0.05
+    },
   },
   data() {
     return {
+      width: 0,
+      height: 0,
       builder: null,
       touchId: null,
+      touchEndTime: 0,
       touchTraces: [],
       error: false,
       success: false,
-      threshold: 2 / 3,
     };
   },
   computed: {
     tracing() {
       return !!this.builder;
     },
-    glowStyle() {
-      const glowWidth = 1.5 * this.width * (1 - this.threshold);
-      const glow = this.error ? '#ff8888' : this.tracing ? '#ffff88' : this.success && '#88ff88';
-      return glow && { boxShadow: `inset 0 0 ${glowWidth}px ${glow}` };
+    arrowStyle() {
+      if (!this.builder || !this.builder.trace.length) {
+        return { visibility: 'hidden', transform: `translate(-50%, -50%)` };
+      }
+      const direction = this.builder.headDirection;
+      const traced = this.builder && this.builder.traceIndex >= 0;
+      const rotation = [-90, 180, 90, 0][direction];
+      return {
+        opacity: traced ? 1 : 0.5,
+        transform: `translate(-50%, -50%) rotate(${rotation}deg)`
+      };
     }
   },
   watch: {
@@ -60,13 +70,15 @@ export default {
       this.drawTrace();
     }
   },
+  mounted() {
+    this.width = this.$refs.configuration.offsetWidth;
+    this.height = this.$refs.configuration.offsetHeight;
+  },
   methods: {
-    ensureBuilder() {
-      if (!this.builder) {
-        this.createBuilder();
-      }
-    },
     createBuilder() {
+      if (this.builder) {
+        return;
+      }
       this.builder = new ConfigBuilder(
           this.id,
           this.threshold,
@@ -89,19 +101,20 @@ export default {
       return [normalize(x, this.width), normalize(y, this.height)];
     },
     onEvent(event, payload) {
-      this.ensureBuilder();
+      this.createBuilder();
       this.builder.onEvent(event, payload);
     },
     reset() {
       this.builder = null;
       this.touchId = null;
+      this.touchEndTime = 0;
       this.touchTraces = [];
     },
     touchstart(e) {
       const touch = e.changedTouches[0];
       const point = this.makePoint(touch);
 
-      this.ensureBuilder();
+      this.createBuilder();
       this.builder.inputStart(point);
       this.touchId = touch.identifier;
 
@@ -115,8 +128,13 @@ export default {
       if (!touch) {
         return;
       }
-      this.builder.inputEnd(this.makePoint(touch));
+      if (Date.now() - this.touchEndTime < 500) {
+        this.builder.finish();
+      } else {
+        this.builder.inputEnd(this.makePoint(touch));
+      }
       this.touchId = null;
+      this.touchEndTime = Date.now();
     },
     touchmove(e) {
       const touch = findTouch(e, this.touchId);
@@ -131,9 +149,9 @@ export default {
       ctx.clearRect(0, 0, this.width, this.height);
 
       const gradient = ctx.createLinearGradient(0, 0, this.width, this.height);
-      gradient.addColorStop(0, '#666');
-      gradient.addColorStop(.5, '#999');
-      gradient.addColorStop(1, '#333');
+      gradient.addColorStop(0, 'purple');
+      gradient.addColorStop(.5 ,'orange');
+      gradient.addColorStop(1, 'red');
       ctx.strokeStyle = gradient;
 
       ctx.lineWidth = 15;
@@ -148,17 +166,22 @@ export default {
 }
 </script>
 
-<style scoped lang="scss">
+<style lang="scss" scoped>
 .configuration {
   display: flex;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
 }
 canvas {
   position: absolute;
 }
-.glow {
-  flex: 1;
-  transition: box-shadow 0.5s ease-in-out;
-} 
+.arrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 360px;
+  transition: transform 500ms ease;
+  transform-origin: 50% 55%;
+}
 </style>

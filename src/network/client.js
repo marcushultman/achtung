@@ -12,7 +12,7 @@ export default class Client {
     this.id = null;
     this.socket.on('readyToCall', id => {
       this.id = id;
-      this.socket.joinRoom('achtung');
+      this.socket.joinRoom('achtung2');
       this.callbacks.connected && this.callbacks.connected(id);
     });
     this.socket.on('createdPeer', peer => {
@@ -31,21 +31,27 @@ export default class Client {
   onConnected(callback) {
     if (this.id) {
       callback(this.id);
-    } else {
-      this.callbacks.connected = callback;
     }
+    this.callbacks.connected = callback;
   }
+
   onPeerJoin(callback) {
     this.callbacks.join = callback;
   }
+
   onPeerLeft(callback) {
     this.callbacks.left = callback;
   }
+
   on(type, callback) {
     this.callbacks.message[type] = callback;
   }
 
   send(type, payload) {
     this.socket.sendDirectlyToAll('achtung', type, payload);
+  }
+
+  disconnect() {
+    this.socket.disconnect();
   }
 }

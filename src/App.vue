@@ -9,6 +9,7 @@ html, body {
   margin: 0;
   overscroll-behavior: none;
   user-select: none;
+  overflow: hidden;
 }
 #app {
   font-family: 'Avenir', Helvetica, Arial, sans-serif;

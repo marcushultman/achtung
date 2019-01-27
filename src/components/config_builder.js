@@ -3,93 +3,56 @@ const kLeft = 1;
 const kDown = 2;
 const kRight = 3;
 
-function isCenter(point, threshold) {
-  const [x, y] = point;
-  return x > -threshold && x < threshold && y > -threshold && y < threshold;
-}
-function borderForPoint([x, y]) {
-  if (x > 0 && x > Math.abs(y)) {
-    return kRight;
-  } else if (x < -Math.abs(y)) {
-    return kLeft;
-  }
-  return y > 0 ? kDown : kUp;
-}
-
 export default class ConfigBuilder {
   constructor(id, threshold, send, onConfig, onReset) {
     console.assert(id !== null && id.length);
-    this.id = id;
-    this.threshold = threshold;
-    this.trace = null;
-    this.startPoint = null;
-    this.send = send;
-    this.onConfig = onConfig;
-    this.onReset = onReset;
+    Object.assign(this, { id, threshold, send, onConfig, onReset, }, {
+      traceIndex: -1,
+      trace: [],
+      startPoint: null,
+    });
   }
   // computed
-  get isTracing() {
-    return this.trace != null;
-  }
-  get emptyTrace() {
-    return this.trace.length == 0;
-  }
-  get isStart() {
-    return this.startPoint === null;
+  get headDirection() {
+    if (this.traceIndex >= 0) {
+      return this.trace[this.traceIndex].direction;
+    } else if (this.trace.length) {
+      return this.trace[this.trace.length - 1].direction;
+    } else {
+      return kRight;
+    }
   }
   // state redirects
   onEvent(event, payload) {
     switch (event) {
-      case 'start': return this.onRemoteStart();
       case 'checkpoint': return this.onRemoteCheckpoint(payload);
       case 'end': return this.onRemoteEnd(payload);
       case 'reset': return this.onReset();
     }
   }
   inputStart(point) {
-    if (isCenter(point, this.threshold)) {
-      this.onLocalStart();
-    } else {
-      this.onLocalCheckpointStart(point);
-    }
+    this.startPoint = point;
   }
   inputEnd(point) {
-    if (!this.isStart && this.emptyTrace) {
-      this.onReset();
-      throw new Error('missing start');
-    }
-    if (isCenter(point, this.threshold)) {
-      this.onLocalEnd();
-    } else {
-      this.onLocalCheckpoint(point);
-    }
+    this.onLocalCheckpoint(point);
+    this.startPoint = null;
   }
-  // state management
-  onLocalStart() {
-    if (this.isTracing) {
-      throw new Error('illegal state');
-    }
-    this.beginCheckpoint(null);
-    this.trace = [];
-    this.send('start');
+  finish() {
+    this.onLocalEnd();
+    this.startPoint = null;
   }
-  onRemoteStart() {
-    this.trace = this.trace || [];
-  }
-  onLocalCheckpointStart(startPoint) {
-    this.beginCheckpoint(startPoint);
-    this.trace = this.trace || [];
-  }
-  onLocalCheckpoint(endPoint) {
-    this.pushCheckpoint(endPoint);
+  onLocalCheckpoint(point) {
+    const { id } = this;
+    const direction = this.getDirection(point);
+    const index = this.trace.length;
+    this.trace.push({ id, direction });
+    this.traceIndex = index;
     this.send('checkpoint', this.trace);
   }
   onRemoteCheckpoint(trace) {
     this.trace = trace;
   }
   onLocalEnd() {
-    this.pushCheckpoint(null);
-    console.assert(this.trace[0].start === null);
     try {
       const config = configFromTrace(this.trace);
       this.send('end', config);
@@ -103,42 +66,25 @@ export default class ConfigBuilder {
   onRemoteEnd({ size, items }) {
     this.onConfig(new Config(size, items));
   }
-  // state helpers
-  beginCheckpoint(startPoint) {
-    this.startPoint = startPoint;
-  }
-  pushCheckpoint(endPoint) {
-    const { id, startPoint } = this;
-    const start = startPoint ? borderForPoint(startPoint) : null;
-    const end = endPoint ? borderForPoint(endPoint) : null;
-    this.trace.push({ id, start, end });
-    this.startPoint = null;
+  // helpers
+  getDirection(point) {
+    const x = this.startPoint[0] - point[0], y = this.startPoint[1] - point[1];
+    const x2 = x * x, y2 = y * y;
+    const distance2 = x2 + y2;
+    if (distance2 < this.threshold) {
+      return this.headDirection;
+    } else if (x2 > y2) {
+      return x > 0 ? kLeft : kRight;
+    } else {
+      return y > 0 ? kUp : kDown;
+    }
   }
 }
-
-function flip(x) { return (x + 2) % 4; }
-
-// function align({ end }, checkpoint) {
-//   if (end % 2 !== checkpoint.start % 2) {
-//     throw new Error('illegal device rotation');
-//   }
-//   if (end === flip(checkpoint.start)) {
-//     return;
-//   }
-//   // todo: flipped
-// }
-
-// function createGrid([sizeX, sizeY]) {
-//   return Array(sizeY).fill(null).map(() => Array(sizeX).fill(null));
-// }
 
 // supports 16x16 grid [0-255]
 function makeKey(x, y) { return (y << 4) + x; }
 
 function configFromTrace(trace) {
-  // if (trace.length === 1) {
-  //   throw new Error('single mode disabled');
-  // }
   let current = [0, 0], min = [0, 0], max = [0, 0];
 
   const traverseNext = direction => ({
@@ -148,28 +94,23 @@ function configFromTrace(trace) {
     [kRight]: () => max[0] = Math.max(max[0], ++current[0]),
   })[direction]();
 
-  for (let i = 0; i < trace.length - 1; ++i) {
-    if (trace[i].end !== flip(trace[i + 1].start)) {
-      throw new Error('illegal device rotation');
-    }
-    traverseNext(trace[i].end);
+  for (let checkpoint of trace.slice(0, -1)) {
+    traverseNext(checkpoint.direction);
   }
 
-  const size = [ -min[0] + max[0] + 1, -min[1] + max[1] + 1 ];
+  const size = [-min[0] + max[0] + 1, -min[1] + max[1] + 1];
   const items = {};
 
-  current = [ -min[0], -min[1] ];
-  for (let i = 0; i < trace.length; ++i) {
-    const { id, end } = trace[i];
+  current = [-min[0], -min[1]];
+  for (let checkpoint of trace) {
+    const { id } = checkpoint;
     const [x, y] = current;
     const key = makeKey(x, y);
-    if (items[key] && items[key].id !== id) {
+    if (items[key]) {
       throw new Error('device mismatch');
     }
     items[key] = { id, x, y };
-    if (end !== null) {
-      traverseNext(end);
-    }
+    traverseNext(checkpoint.direction);
   }
   return new Config(size, items);
 }
