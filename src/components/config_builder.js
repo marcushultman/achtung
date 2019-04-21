@@ -22,6 +22,9 @@ export default class ConfigBuilder {
       return kRight;
     }
   }
+  get headRotation() {
+    return [-90, 180, 90, 0][this.headDirection];
+  }
   // state redirects
   onEvent(event, payload) {
     switch (event) {
@@ -94,7 +97,7 @@ function configFromTrace(trace) {
     [kRight]: () => max[0] = Math.max(max[0], ++current[0]),
   })[direction]();
 
-  for (let checkpoint of trace.slice(0, -1)) {
+  for (const checkpoint of trace.slice(0, -1)) {
     traverseNext(checkpoint.direction);
   }
 
@@ -102,7 +105,7 @@ function configFromTrace(trace) {
   const items = {};
 
   current = [-min[0], -min[1]];
-  for (let checkpoint of trace) {
+  for (const checkpoint of trace) {
     const { id } = checkpoint;
     const [x, y] = current;
     const key = makeKey(x, y);
