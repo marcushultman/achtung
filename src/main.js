@@ -1,12 +1,17 @@
 import Vue from 'vue'
 import App from './App.vue'
-import router from './router'
 import './registerServiceWorker'
+import createRouter from './router'
+import createStore from './store'
+import Client from './network/client';
 
 Vue.config.productionTip = false
 
+const client = new Client();
+
 new Vue({
-  router,
+  router: createRouter(client),
+  store: createStore(client),
   render: h => h(App)
 }).$mount('#app')
 
