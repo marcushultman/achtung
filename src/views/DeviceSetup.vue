@@ -1,10 +1,22 @@
 <template>
   <transition name="fade">
     <div class="device-setup" @click="finish">
+      <p>
+        <span>{{ offsetX }}</span>,
+        <span>{{ offsetY }}</span>
+      </p>
       <div v-if="loading">loading...</div>
-      <div v-else v-for="y in coordinates.y" :key="y" class="row">
+      <!-- <div v-else v-for="y in coordinates.y" :key="y" class="row">
         <div v-for="x in coordinates.x" :key="x" class="device"
-            :class="{ selected: findByPosition(x, y), current: isCurrent(x, y) }"
+            :class="{ selected: findByPosition(x, y), local: isLocal(x, y) }"
+            :style="deviceStyle(findByPosition(x, y))"
+            @click.stop="select(x, y)">
+        </div>
+      </div> -->
+      <div v-else class="grid" :style="gridStyle">
+        <div v-for="{ x, y, device }, i in all" :key="i" ref="dev" class="device"
+            :class="{ selected: device, local: isLocal(x, y) }"
+            :style="deviceStyle(x, y, device)"
             @click.stop="select(x, y)">
         </div>
       </div>
@@ -15,46 +27,96 @@
 <script>
 import { mapState, mapGetters, mapMutations } from 'vuex'
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+};
+
 export default {
   name: 'DeviceSetup',
   props: {
     client: Object,
   },
+  data() {
+    return {
+      callbacks: null,
+      deviceWidth: window.innerWidth,
+      deviceHeight: window.innerHeight,
+      offsetX: 0.5,
+      offsetY: 0.5,
+      dragStart: null,
+      dragWidth: 0,
+      dragHeight: 0,
+    };
+  },
   computed: {
     ...mapState(['id']),
     loading() { return !this.id; },
-    ...mapGetters(['width', 'height', 'left', 'top', 'findById', 'findByPosition']),
+    ...mapGetters(['width', 'height', 'top', 'left', 'right', 'bottom', 'findById', 'findByPosition']),
     coordinates() {
       return {
         x: Array.from(Array(2 + this.width).keys()).map(x => x + this.left - 1),
         y: Array.from(Array(2 + this.height).keys()).map(y => y + this.top - 1),
       };
     },
+    all() {
+      const list = [];
+      for (let y of this.coordinates.y) {
+        for (let x of this.coordinates.x) {
+          list.push({ x, y, device: this.findByPosition(x, y) });
+        }
+      }
+      return list;
+    },
+    gridStyle() {
+      return {
+        gridTemplateColumns: 'auto '.repeat(this.coordinates.x.length),
+      };
+    },
+    deviceStyle() {
+      return (x, y, device) => {
+        return device ? ({
+          minWidth: `${Math.round(0.05 * device.deviceWidth)}mm`,
+          minHeight: `${Math.round(0.05 * device.deviceHeight)}mm`,
+          alignSelf: y >= (this.bottom + this.top) / 2 ? 'start' : 'end',
+          justifySelf: x >= (this.right + this.left) / 2 ? 'start' : 'end',
+        }) : {};
+      };
+    },
   },
   mounted() {
-    this.client.send('config:request');
-    this.client.onPeerJoin((peer) => {
-      console.log('onPeerJoin', peer);
-      this.client.send('config:selection', this.$store.state.config.selection);
+    window.onresize = () => this.updateDeviceInfo();
+    this.callbacks = this.client.createCallbacks({
+      $join: () => { this.client.send('config:request'); },
+      ['config:selection']: selection => this.$store.commit('setSelection', selection),
+      ['config:finish']: () => this.$router.push('/'),
     });
-    this.client.onPeerLeft(peer => this.$store.commit('deselect', peer.id));
-    this.client.on('config:selection', selection => this.$store.commit('setSelection', selection));
-    this.client.on('config:finish', () => this.$router.push('/'));
+    this.client.send('config:request');
+  },
+  beforeDestroy() {
+    delete window.onresize;
+    this.client.resetCallbacks(this.callbacks);
   },
   methods: {
     ...mapMutations(['reset']),
     select(x, y) {
-      this.$store.commit('select', { x, y, id: this.id });
+      this.$store.commit('select', { x, y, id: this.id,
+        deviceWidth: this.deviceWidth,
+        deviceHeight: this.deviceHeight,
+      });
       this.client.send('config:selection', this.$store.state.config.selection);
     },
-    isCurrent(x, y) {
+    isLocal(x, y) {
       const selected = this.findById(this.id);
       return selected && selected.x === x && selected.y === y;
     },
     finish() {
       this.$router.push('/');
       this.client.send('config:finish');
-    }
+    },
+    updateDeviceInfo() {
+      this.deviceWidth = window.innerWidth;
+      this.deviceHeight = window.innerHeight;
+    },
   }
 }
 </script>
@@ -78,6 +140,10 @@ export default {
   justify-content: center;
   align-items: center;
 }
+.grid {
+  display: grid;
+  grid-gap: 2px;
+}
 .row {
   display: flex;
   &:first-child .device { border-top: 0; }
@@ -88,13 +154,15 @@ export default {
   }
 }
 .device {
-  width: 48px;
-  height: 64px;
-  line-height: 64px;
-  font-size: 18px;
-  color: gray;
-  border: 1px solid black;
-  &.selected { background: #aad; }
-  &.current { background: #88a; }
+  min-width: 48px;
+  min-height: 64px;
+  border: 1px dashed #666;
+  border-radius: 16px;
+  &.selected {
+    background: #aad;
+    border: 1px solid black;
+    border-radius: 4px;
+  }
+  &.local { background: #88a; }
 }
 </style>

@@ -2,12 +2,7 @@ import SimpleWebRTC from 'simplewebrtc';
 
 export default class Client {
   constructor(debug = true) {
-    this.callbacks = {
-      connected() {},
-      join() {},
-      left() {},
-      message: {},
-    };
+    this.callbacks = [];
     this.socket = new SimpleWebRTC({
       url: 'https://webrtc.splits.link',
       debug,
@@ -18,43 +13,44 @@ export default class Client {
     this.socket.on('readyToCall', id => {
       this.id = id;
       this.socket.joinRoom('achtung');
-      this.callbacks.connected(id);
+      this.callbacks.forEach(cb => cb.$connected(id));
     });
     this.socket.on('createdPeer', peer => {
       const channel = peer.getDataChannel('achtung');
       if (channel.readyState != 'open') {
-        this.socket.on('channelOpen', dc => dc == channel && this.callbacks.join(peer));
+        this.socket.on('channelOpen', dc => {
+          if (dc == channel) {
+            this.callbacks.forEach(cb => cb.$join(peer));
+          }
+        });
       } else {
-        this.callbacks.join(peer);
+        this.callbacks.forEach(cb => cb.$join(peer));
       }
     });
     this.socket.on('peerStreamRemoved', peer => {
-      this.callbacks.left(peer);
+      this.callbacks.forEach(cb => cb.$left(peer));
     });
     this.socket.on('channelMessage', (peer, label, { type, payload }) => {
       if (label === 'achtung') {
-        this.callbacks.message[type] && this.callbacks.message[type](payload);
+        this.callbacks.forEach(cb => cb[type] && cb[type](payload));
       }
     });
   }
 
-  onConnected(callback) {
+  createCallbacks(callbacks = {}) {
+    callbacks = Object.assign({}, { $join() {}, $left() {}, $connected() {} }, callbacks);
     if (this.id) {
-      callback(this.id);
+      callbacks.$connected(this.id);
     }
-    this.callbacks.connected = callback;
+    this.callbacks.push(callbacks);
+    return callbacks;
   }
 
-  onPeerJoin(callback) {
-    this.callbacks.join = callback;
-  }
-
-  onPeerLeft(callback) {
-    this.callbacks.left = callback;
-  }
-
-  on(type, callback) {
-    this.callbacks.message[type] = callback;
+  resetCallbacks(callbacks) {
+    const index = this.callbacks.indexOf(callbacks);
+    if (index >= 0) {
+      this.callbacks.splice(index, 1);
+    }
   }
 
   send(type, payload) {

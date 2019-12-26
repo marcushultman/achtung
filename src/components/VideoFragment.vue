@@ -1,5 +1,5 @@
 <template>
-  <div v-show="device" class="video-fragment" :style="parentStyle">
+  <div v-show="device" class="video-fragment" :style="style">
     <youtube :video-id="videoId" :player-vars="playerVars" ref="youtube"
         :fitParent="true" @playing="playing" @paused="paused"/>
   </div>
@@ -9,7 +9,7 @@
 import Vue from 'vue';
 import VueYoutube from 'vue-youtube';
 import { mapState, mapGetters } from 'vuex';
- 
+
 Vue.use(VueYoutube);
 
 export default {
@@ -19,6 +19,7 @@ export default {
   },
   data() {
     return {
+      callbacks: null,
       state: 'pause',
       videoId: 'ULrxa1KVzZU',
       playerVars: {
@@ -27,63 +28,73 @@ export default {
         disablekb: 1,
         fs: 0,
         modestbranding: 1,
+        playsinline: 1,
       }
     };
   },
   methods: {
     async playing() {
       if (this.state !== 'play') {
+        const timestamp = Date.now();
         const time = await this.player.getCurrentTime();
-        this.client.send('video:playing', { timestamp: Date.now(), time });
+        this.client.send('video:playing', { timestamp, time });
         this.state = 'play';
       }
     },
     async paused() {
       if (this.state !== 'paused') {
+        const timestamp = Date.now();
         const time = await this.player.getCurrentTime();
-        this.client.send('video:paused', { timestamp: Date.now(), time });
+        this.client.send('video:paused', { timestamp, time });
         this.state = 'paused';
       }
     }
   },
   computed: {
     ...mapState(['id']),
-    ...mapGetters(['findById', 'top', 'left', 'width', 'height']),
-    player() { return this.$refs.youtube.player; },
+    ...mapGetters(['devices', 'findById', 'columns', 'rows']),
     device() { return this.findById(this.id); },
-    style() { return { transform: `scale(${this.width})` }; },
-    parentStyle() {
+    player() { return this.$refs.youtube.player; },
+    style() {
       if (!this.device) {
         return;
       }
-      const fullWidth = this.width * window.innerWidth;
-      // const fullHeight = this.height * window.innerHeight;
-      const x = (this.left - this.device.x) * window.innerWidth;
-      const y = (this.top - this.device.y) * window.innerHeight;
-      // const y = (fullHeight - fullWidth) / 2 - this.device.y * window.innerHeight;
+      const x = Object.entries(this.columns)
+          .filter(([x]) => x < this.device.x)
+          .reduce((sum, [x, col]) => sum - col, 0);
+      const y = Object.entries(this.rows)
+          .filter(([y]) => y < this.device.y)
+          .reduce((sum, [y, row]) => sum - row, 0);
+      const width = Object.values(this.columns).reduce((sum, col) => sum + col, 0);
+      const height = Object.values(this.rows).reduce((sum, row) => sum + row, 0);
       return {
-        width: `${fullWidth}px`,
         transform: `translate(${x}px, ${y}px)`,
+        width: `${width}px`,
+        height: `${height}px`,
       };
     },
   },
   watch: {
-    width() { this.$refs.youtube.resizeProportionally(); },
-    device() { this.$refs.youtube.resizeProportionally(); },
+    devices() { this.$refs.youtube.resizeProportionally(); },
   },
   mounted() {
-    this.client.on('video:playing', ({ timestamp, time }) => {
-      this.state = 'play';
-      const position = time + (Date.now() - timestamp) / 1000;
-      const seekTarget = Math.ceil(position);
-      this.player.seekTo(seekTarget, true);
-      setTimeout(() => this.player.playVideo(), (seekTarget - position) * 1000);
+    this.callbacks = this.client.createCallbacks({
+      ['video:playing']: ({ timestamp, time }) => {
+        this.state = 'play';
+        const position = time + (Date.now() - timestamp) / 1000;
+        const seekTarget = Math.ceil(position + 1);  // +1s extra buffer for fast play
+        this.player.seekTo(seekTarget, true);
+        setTimeout(() => this.player.playVideo(), (seekTarget - position) * 1000);
+      },
+      ['video:paused']: async ({ time }) => {
+        this.state = 'paused';
+        await this.player.pauseVideo();
+        await this.player.seekTo(time, true);
+      },
     });
-    this.client.on('video:paused', async ({ time }) => {
-      this.state = 'paused';
-      await this.player.pauseVideo();
-      await this.player.seekTo(time, true);
-    });
+  },
+  beforeDestroy() {
+    this.client.resetCallbacks(this.callbacks);
   },
 }
 </script>
