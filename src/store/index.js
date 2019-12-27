@@ -32,8 +32,10 @@ export default client => {
     const text = parsedUrl.searchParams.get('text');
     const url = parsedUrl.searchParams.get('url');
     const params = { title, text, url };
-    store.commit('setUrlParams', params);
-    client.send('params', params);
+    if (url) {
+      store.commit('setUrlParams', params);
+      client.send('params', params);
+    }
   });
   return store;
 }

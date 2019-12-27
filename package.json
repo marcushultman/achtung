@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "vue-cli-service serve",
+    "serve": "vue-cli-service serve --production",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
     "start": "http-server dist"
   },
   "dependencies": {
     "node-sass": "^4.12.0",
-    "register-service-worker": "^1.5.2",
+    "register-service-worker": "^1.6.2",
     "sass-loader": "^7.1.0",
     "simplewebrtc": "^3.0.2",
     "vue": "^2.5.21",
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@vue/cli-plugin-babel": "^3.3.0",
     "@vue/cli-plugin-eslint": "^3.3.0",
-    "@vue/cli-plugin-pwa": "^3.3.0",
+    "@vue/cli-plugin-pwa": "^3.12.1",
     "@vue/cli-service": "^3.3.0",
     "@vue/eslint-config-standard": "^4.0.0",
     "babel-eslint": "^10.0.1",
