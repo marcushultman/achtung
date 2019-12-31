@@ -7,7 +7,7 @@ import Client from './network/client';
 
 Vue.config.productionTip = false
 
-const client = new Client();
+const client = new Client(0);
 
 new Vue({
   router: createRouter(client),

@@ -1,12 +1,26 @@
 const findById = (selection, id) => selection.find(device => device.id === id);
 const findByPosition = (selection, x, y) => selection.find(device => device.x === x && device.y === y);
 
-export default {
+function sendConfig(client, store, peer) {
+  if (store.state.config.selection.length) {
+    client.send('config:selection', store.state.config.selection);
+  }
+}
+
+export function createConfigCallbacks(client, store) {
+  return {
+    $join: peer => sendConfig(client, store, peer),
+    $left: peer => store.commit('deselect', peer.id),
+    ['config:selection']: selection => store.commit('setSelection', selection),
+  };
+}
+
+export default client => ({
   state: {
     selection: [],
   },
   getters: {
-    devices: ({ selection }) => selection,   
+    devices: ({ selection }) => selection,
     top: ({ selection }) => selection.length ? Math.min(...selection.map(({ y }) => y)) : 0,
     left: ({ selection }) => selection.length ? Math.min(...selection.map(({ x }) => x)) : 0,
     right: ({ selection }) => selection.length ? Math.max(...selection.map(({ x }) => x)) : 0,
@@ -39,4 +53,4 @@ export default {
       state.selection = selection;
     },
   }
-};
+});

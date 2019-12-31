@@ -1,41 +1,68 @@
 import Vue from 'vue'
 import Vuex from 'vuex'
-import config from './config'
+import createConfig, { createConfigCallbacks } from './config'
+import createAchtung, { createGameCallbacks } from './achtung'
 
 Vue.use(Vuex)
 
+function onLocationUpdate(client, store) {
+  const parsedUrl = new URL(window.location);
+  const title = parsedUrl.searchParams.get('title');
+  const text = parsedUrl.searchParams.get('text');
+  const url = parsedUrl.searchParams.get('url');
+  const params = { title, text, url };
+  if (url) {
+    store.commit('setUrlParams', params);
+    client.send('params', params);
+  }
+}
+
+function sendParams(client, store) {
+  if (store.state.params.url !== null) {
+    client.send('params', store.state.params);
+  }
+}
+
+function createCallbacks(client, store) {
+  return {
+    $connected: id => store.commit('setId', id),
+    $join: () => sendParams(client, store),
+    ['params']: params => store.commit('setUrlParams', params), 
+  };
+}
+
 export default client => {
   const store = new Vuex.Store({
-    modules: { config },
+    modules: {
+      config: createConfig(client),
+      achtung: createAchtung(client),
+    },
     state: {
       id: null,
-      title: null,
-      text: null,
-      url: null,
+      params: {
+        title: null,
+        text: null,
+        url: null,
+      },
     },
     mutations: {
       setId(state, id) {
         state.id = id;
       },
-      setUrlParams(state, { title, text, url }) {
-        Object.assign(state, { title, text, url });
+      setUrlParams(state, params) {
+        state.params = params;
       },
     },
-  });
-  client.createCallbacks({
-    $connected: id => store.commit('setId', id),
-    ['params']: params => store.commit('setUrlParams', params), 
-  });
-  window.addEventListener('DOMContentLoaded', () => {
-    const parsedUrl = new URL(window.location);
-    const title = parsedUrl.searchParams.get('title');
-    const text = parsedUrl.searchParams.get('text');
-    const url = parsedUrl.searchParams.get('url');
-    const params = { title, text, url };
-    if (url) {
-      store.commit('setUrlParams', params);
-      client.send('params', params);
+    getters: {
+      title: ({ params }) => params.title,
+      text: ({ params }) => params.text,
+      url: ({ params }) => params.url,
     }
   });
+  client.createCallbacks(createCallbacks(client, store));
+  client.createCallbacks(createConfigCallbacks(client, store));
+  client.createCallbacks(createGameCallbacks(client, store));
+  window.addEventListener('DOMContentLoaded', () => onLocationUpdate(client, store));
+  onLocationUpdate(client, store);
   return store;
 }

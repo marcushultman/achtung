@@ -14,52 +14,22 @@ export default {
   data() {
     return {
       callbacks: null,
-      // state: 'pause',
-      // videoId: 'ULrxa1KVzZU',
-      // playerVars: {
-      //   start: 0,
-      //   controls: 0,
-      //   disablekb: 1,
-      //   fs: 0,
-      //   modestbranding: 1,
-      //   playsinline: 1,
-      // }
     };
-  },
-  methods: {
-    // async playing() {
-    //   if (this.state !== 'play') {
-    //     const timestamp = Date.now();
-    //     const time = await this.player.getCurrentTime();
-    //     this.client.send('video:playing', { timestamp, time });
-    //     this.state = 'play';
-    //   }
-    // },
-    // async paused() {
-    //   if (this.state !== 'paused') {
-    //     const timestamp = Date.now();
-    //     const time = await this.player.getCurrentTime();
-    //     this.client.send('video:paused', { timestamp, time });
-    //     this.state = 'paused';
-    //   }
-    // }
   },
   computed: {
     ...mapState(['id']),
-    ...mapGetters(['findById', 'columns', 'rows']),
+    ...mapGetters(['findById', 'columns', 'rows', 'url']),
     device() { return this.findById(this.id); },
-    // player() { return this.$refs.youtube.player; },
     style() {
       if (!this.device) {
         return;
       }
-
       // localhost:8080/?url=https%3A%2F%2Fi.redditmedia.com%2FqH5nAx5HnNK92CnLXgZKfC09ONwSjaZejalUyUzTQTQ.jpg%3Fw%3D650%26s%3D7a848a073a47d29c993c5dba35f25fe2
-
-      const url = new URL(window.location).searchParams.get('text');
-      const backgroundImage = url
-          ? `url(${decodeURIComponent(url)})`
-          : 'url(https://gfx-bloggar.aftonbladet-cdn.se/wp-content/blogs.dir/428/files/2014/11/Skarmavbild-2014-11-28-kl.-11.05.36.png)';
+      const backgroundImage = `url(${decodeURIComponent(this.url)})`;
+      // const url = new URL(window.location).searchParams.get('text');
+      // const backgroundImage = url
+      //     ? `url(${decodeURIComponent(url)})`
+      //     : 'url(https://gfx-bloggar.aftonbladet-cdn.se/wp-content/blogs.dir/428/files/2014/11/Skarmavbild-2014-11-28-kl.-11.05.36.png)';
       // const backgroundImage = 'url(https://i.redditmedia.com/qH5nAx5HnNK92CnLXgZKfC09ONwSjaZejalUyUzTQTQ.jpg?w=650&s=7a848a073a47d29c993c5dba35f25fe2)';
       // const backgroundImage = 'url(https://www.cloudberries.co.uk/wp-content/uploads/2018/01/shades-gradient-photoshop-1.jpg)';
 

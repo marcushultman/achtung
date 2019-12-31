@@ -5,8 +5,7 @@
   "scripts": {
     "serve": "vue-cli-service serve --production",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint",
-    "start": "http-server dist"
+    "lint": "vue-cli-service lint"
   },
   "dependencies": {
     "node-sass": "^4.12.0",

@@ -1,25 +1,22 @@
 <template>
   <transition name="fade">
     <div class="device-setup" @click="finish">
-      <p>
-        <span>{{ offsetX }}</span>,
-        <span>{{ offsetY }}</span>
-      </p>
       <div v-if="loading">loading...</div>
-      <!-- <div v-else v-for="y in coordinates.y" :key="y" class="row">
-        <div v-for="x in coordinates.x" :key="x" class="device"
-            :class="{ selected: findByPosition(x, y), local: isLocal(x, y) }"
-            :style="deviceStyle(findByPosition(x, y))"
-            @click.stop="select(x, y)">
+      <template v-else>
+        <h1>Device configuration</h1>
+        <div class="help">Align the devices according to the grid. Tap on the corresponding grid cell <b>on each device</b> to acknownledge the device placement.</div>
+        <div class="grid" :style="gridStyle">
+          <div v-for="{ x, y, device }, i in coordinates" :key="i" class="device"
+              :class="{ selected: device, local: isLocal(x, y) }"
+              :style="deviceStyle(x, y, device)"
+              @click.stop="select(x, y)">
+            <template v-if="device">
+              <div class="screen"></div>
+              <div class="button">⊚</div>
+            </template>
+          </div>
         </div>
-      </div> -->
-      <div v-else class="grid" :style="gridStyle">
-        <div v-for="{ x, y, device }, i in all" :key="i" ref="dev" class="device"
-            :class="{ selected: device, local: isLocal(x, y) }"
-            :style="deviceStyle(x, y, device)"
-            @click.stop="select(x, y)">
-        </div>
-      </div>
+      </template>
     </div>
   </transition>
 </template>
@@ -27,9 +24,7 @@
 <script>
 import { mapState, mapGetters, mapMutations } from 'vuex'
 
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-};
+const SCALE = 0.035;
 
 export default {
   name: 'DeviceSetup',
@@ -41,53 +36,45 @@ export default {
       callbacks: null,
       deviceWidth: window.innerWidth,
       deviceHeight: window.innerHeight,
-      offsetX: 0.5,
-      offsetY: 0.5,
-      dragStart: null,
-      dragWidth: 0,
-      dragHeight: 0,
     };
   },
   computed: {
     ...mapState(['id']),
     loading() { return !this.id; },
-    ...mapGetters(['width', 'height', 'top', 'left', 'right', 'bottom', 'findById', 'findByPosition']),
+    ...mapGetters([
+      'bottom',
+      'findById',
+      'findByPosition',
+      'left',
+      'right',
+      'top',
+      'width',
+    ]),
     coordinates() {
-      return {
-        x: Array.from(Array(2 + this.width).keys()).map(x => x + this.left - 1),
-        y: Array.from(Array(2 + this.height).keys()).map(y => y + this.top - 1),
-      };
-    },
-    all() {
-      const list = [];
-      for (let y of this.coordinates.y) {
-        for (let x of this.coordinates.x) {
-          list.push({ x, y, device: this.findByPosition(x, y) });
+      const coordinates = [];
+      for (let y = this.top - 1; y < this.bottom + 2; ++y) {
+        for (let x = this.left - 1; x < this.right + 2; ++x) {
+          coordinates.push({ x, y, device: this.findByPosition(x, y) });
         }
       }
-      return list;
+      return coordinates;
     },
     gridStyle() {
-      return {
-        gridTemplateColumns: 'auto '.repeat(this.coordinates.x.length),
-      };
+      return { gridTemplateColumns: 'auto '.repeat(this.width + 2) };
     },
     deviceStyle() {
-      return (x, y, device) => {
-        return device ? ({
-          minWidth: `${Math.round(0.05 * device.deviceWidth)}mm`,
-          minHeight: `${Math.round(0.05 * device.deviceHeight)}mm`,
-          alignSelf: y >= (this.bottom + this.top) / 2 ? 'start' : 'end',
-          justifySelf: x >= (this.right + this.left) / 2 ? 'start' : 'end',
-        }) : {};
-      };
+      return (x, y, device) => device ? {
+        minWidth: `${Math.round(SCALE * device.deviceWidth)}mm`,
+        minHeight: `${Math.round(SCALE * device.deviceHeight)}mm`,
+        alignSelf: y >= (this.bottom + this.top) / 2 ? 'start' : 'end',
+        justifySelf: x >= (this.right + this.left) / 2 ? 'start' : 'end',
+      } : {};
     },
   },
   mounted() {
     window.onresize = () => this.updateDeviceInfo();
     this.callbacks = this.client.createCallbacks({
-      $join: () => { this.client.send('config:request'); },
-      ['config:selection']: selection => this.$store.commit('setSelection', selection),
+      $join: () => this.client.send('config:request'),
       ['config:finish']: () => this.$router.push('/'),
     });
     this.client.send('config:request');
@@ -99,7 +86,9 @@ export default {
   methods: {
     ...mapMutations(['reset']),
     select(x, y) {
-      this.$store.commit('select', { x, y, id: this.id,
+      this.$store.commit('select', {
+        x, y,
+        id: this.id,
         deviceWidth: this.deviceWidth,
         deviceHeight: this.deviceHeight,
       });
@@ -137,32 +126,51 @@ export default {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+}
+h1 {
+  margin: 0px;
+}
+.help {
+  max-width: 400px;
+  margin: 16px 0;
 }
 .grid {
   display: grid;
-  grid-gap: 2px;
-}
-.row {
-  display: flex;
-  &:first-child .device { border-top: 0; }
-  &:last-child .device { border-bottom: 0; }
-  & .device {
-    &:first-child { border-left: 0; }
-    &:last-child { border-right: 0; }
-  }
+  grid-gap: 3px;
 }
 .device {
   min-width: 48px;
   min-height: 64px;
-  border: 1px dashed #666;
+  border: 1px dashed #999;
   border-radius: 16px;
+  display: flex;
+  flex-direction: column;
   &.selected {
-    background: #aad;
+    background: #888;
     border: 1px solid black;
     border-radius: 4px;
   }
-  &.local { background: #88a; }
+  &.local { background: #abc; }
+  & .screen {
+    flex: 1;
+    margin: 4px;
+    background: #ffffff44;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    &::after {
+      content: "//";
+      font-size: 48px;
+      color: #ffffff88;
+    }
+  }
+  & .button {
+    flex: 0 18px;
+    font-size: 18px;
+    line-height: 12px;
+    color: #444;
+  }
 }
 </style>
