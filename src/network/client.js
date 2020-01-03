@@ -10,15 +10,13 @@ export default class Client {
       receiveMedia: {}
     });
     this.id = null;
-    this.socket.on('readyToCall', id => {
+    this.socket.on('connectionReady', id => {
       this.id = id;
-      this.socket.joinRoom('achtung');
-      this.callbacks.forEach(cb => cb.$connected(id));
     });
     this.socket.on('createdPeer', peer => {
       const channel = peer.getDataChannel('achtung');
       if (channel.readyState != 'open') {
-        this.socket.on('channelOpen', dc => {
+        peer.on('channelOpen', dc => {
           if (dc == channel) {
             this.callbacks.forEach(cb => cb.$join(peer));
           }
@@ -30,6 +28,11 @@ export default class Client {
     this.socket.on('peerStreamRemoved', peer => {
       this.callbacks.forEach(cb => cb.$left(peer));
     });
+    this.session = null;
+    this.socket.on('joinedRoom', (session) => {
+      this.session = session;
+      this.callbacks.forEach(cb => cb.$connected(this.id, this.session));
+    })
     this.socket.on('channelMessage', (peer, label, { type, payload }) => {
       if (label === 'achtung') {
         this.callbacks.forEach(cb => cb[type] && cb[type](payload));
@@ -37,10 +40,15 @@ export default class Client {
     });
   }
 
+  join(session) {
+    this.socket.leaveRoom();
+    this.socket.joinRoom(session);
+  }
+
   createCallbacks(callbacks = {}) {
     callbacks = Object.assign({}, { $join() {}, $left() {}, $connected() {} }, callbacks);
-    if (this.id) {
-      callbacks.$connected(this.id);
+    if (this.id && this.session) {
+      callbacks.$connected(this.id, this.session);
     }
     this.callbacks.push(callbacks);
     return callbacks;

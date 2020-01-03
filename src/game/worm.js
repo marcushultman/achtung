@@ -6,14 +6,14 @@ const cross = (a, b) => a.x * b.y - a.y * b.x;
 
 const SKIP_PROB = 0;
 // const SKIP_PROB = 0.0025;
-const SKIP_DISTANCE = 200;
 
 export default class Worm {
-  constructor (width, height, position, direction, color) {
+  constructor (width, height, position, direction, name, color) {
     this.width = width;
     this.height = height;
     this.random = new Random();
 
+    this.name = name;
     this.color = color;
     this.speed = 0.1;
     this.is_dead = false;
@@ -50,7 +50,7 @@ export default class Worm {
       return null;
     }
     const point = this.create_tail_point(
-      this.position, this.direction, is_start)
+      this.position, this.direction, is_start)
     this.tail.push(point);
     return point;
   }
@@ -131,17 +131,15 @@ export default class Worm {
     }
     ctx.strokeStyle = this.color;
     ctx.beginPath();
-    let prev_dir;
     for (const point of this.tail) {
-      this.draw_segment(ctx, point, prev_dir);
-      prev_dir = point.direction;
+      this.draw_segment(ctx, point);
     }
     this.draw_segment(ctx, this.create_tail_point(
-      this.position, this.direction), prev_dir);
+      this.position, this.direction), true);
     ctx.stroke();
   }
 
-  draw_segment(ctx, point, prev_dir) {
+  draw_segment(ctx, point) {
     if (point.cp1) {
       ctx.bezierCurveTo(
         point.cp1.x, point.cp1.y,

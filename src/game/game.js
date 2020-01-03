@@ -4,14 +4,11 @@ import RangeMap from './range_map';
 import Worm from './worm'
 import Point from './point'
 import CollisionUtil from './collision'
-import Color from './color'
 
-const LEFT = 0, RIGHT = 1;
 const ACTION_TURN = 0,
       ACTION_TRANSFER = 1,
       EVENT_TRANSFER = 2,
-      EVENT_DEATH = 3,
-      ACTION_RESTART = 4;
+      EVENT_DEATH = 3;
 
 const SPAWN_OFFSET_AMOUNT = 0.2; 
 
@@ -31,9 +28,7 @@ export default class Game {
               on_score_updated,
               on_game_over) {
     this.ctx = ctx;
-    this.width = this.ctx.canvas.width = window.innerWidth;
-    this.height = this.ctx.canvas.height = window.innerHeight;
-    this.ctx.lineWidth = 5;
+    this.score = new Score();
 
     this.local_id = local_id;
 
@@ -50,40 +45,45 @@ export default class Game {
     requestAnimationFrame(t => this.main_loop(t));
   }
 
-  start() {
-    const seed = Date.now();
-    this.send_message(0, { type: ACTION_RESTART, seed });
+  resetScore() {
+    this.score = new Score();
   }
 
-  start_game(seed) {
+  start(seed) {
     this.worms = new Map();
     this.worm_devices = new Map();
-    this.score = new Score();
+    this.score.commit();
+
+    this.width = this.ctx.canvas.width = window.innerWidth;
+    this.height = this.ctx.canvas.height = window.innerHeight;
 
     const random = new Random(seed);
 
     this.players = this.get_players();
     const spawn_devices =
-        new RangeMap([...new Set(this.players.values())].map(id => [this.get_device_area(id), id]));
+        new RangeMap([...new Set(this.players.values())]
+          .map(({ device_id }) => [this.get_device_area(device_id), device_id]));
 
-    for (const [index, controller_id] of [...this.players.keys()].entries()) {
+    for (const [player_id, { color }] of this.players.entries()) {
       const position = new Point(
           random.range(SPAWN_OFFSET_AMOUNT * this.width, (1 - SPAWN_OFFSET_AMOUNT) * this.width),
           random.range(SPAWN_OFFSET_AMOUNT * this.height, (1 - SPAWN_OFFSET_AMOUNT) * this.height));
       const direction = random.range(-Math.PI, Math.PI);
 
-      this.worms.set(controller_id, new Worm(
+      this.worms.set(player_id, new Worm(
           this.width,
           this.height,
           position,
           direction,
-          Color.get(index)));
+          color.name,
+          color.value));
 
       const device_id = spawn_devices.get(random.range(0, spawn_devices.max));
-      this.worm_devices.set(controller_id, device_id);
+      this.worm_devices.set(player_id, device_id);
+      this.score.set(player_id, 0);
     }
 
-    this.on_score_updated(this.score);
+    this.on_score_updated(this.score.getTotalResult());
 
     this.elapsed_time = 0;
     this.max_fps = 30;
@@ -133,10 +133,6 @@ export default class Game {
         this.worms.get(message.controller_id).kill();
         return;
       }
-      case ACTION_RESTART: {
-        this.start_game(message.seed);
-        return;
-      }
     }
   }
 
@@ -159,7 +155,7 @@ export default class Game {
 
   // =====
 
-  transfer(controller_id, worm, side) {
+  transfer(controller_id, worm, side) {
     const device_id = this.get_adjacent_device(side);
     if (device_id) {
       const { x, y } = worm.position;
@@ -174,12 +170,12 @@ export default class Game {
       });
       return true;
     } else {
-      this.kill_worm(controller_id, worm);
+      this.kill_worm(controller_id);
       return false;
     }
   }
 
-  kill_worm(controller_id, worm) {
+  kill_worm(controller_id) {
     this.send_message(0, { type: EVENT_DEATH, controller_id });
   }
 
@@ -192,27 +188,32 @@ export default class Game {
       }
       const updated =
           worm.update(this.elapsed_time, side => this.transfer(controller_id, worm, side));
-      if (updated && this.check_collision(worm, controller_id)) {
-        this.kill_worm(controller_id, worm);
+      if (updated && this.check_collision(worm)) {
+        this.kill_worm(controller_id);
       }
     }
     // update scores
-    const num_worms_dead = [...this.worms.values()].filter(worm => worm.is_dead).length;
+    const dead_worms = [...this.worms.values()].filter(worm => worm.is_dead);
+    const alive_worms = [];
+    let changed = false;
     for (const [controller_id, worm] of this.worms) {
       if (!worm.is_dead) {
-        this.score.set(controller_id, num_worms_dead);
+        changed |= this.score.set(controller_id, dead_worms.length);
+        alive_worms.push(worm);
       }
     }
-    this.on_score_updated(this.score);
+    if (changed) {
+      this.on_score_updated(this.score.getTotalResult());
+    }
 
     // check game over
-    if (num_worms_dead >= this.players.size - 1) {
+    if (alive_worms.length <= 1) {
       this.game_over = true;
-      this.on_game_over();
+      this.on_game_over(alive_worms[0]);
     }
   }
 
-  check_collision(worm, controller_id) {
+  check_collision(worm) {
     for (let other of this.worms.values()) {
       let prev = other.tail[0];
       for (const point of other.create_collition_points(other === worm)) {
@@ -232,6 +233,7 @@ export default class Game {
 
   draw() {
     this.ctx.clearRect(0, 0, this.width, this.height);
+    this.ctx.lineWidth = 5;
     for (const worm of this.worms.values()) {
       worm.draw(this.ctx);
     }

@@ -6,9 +6,9 @@
         <h1>Device configuration</h1>
         <div class="help">Align the devices according to the grid. Tap on the corresponding grid cell <b>on each device</b> to acknownledge the device placement.</div>
         <div class="grid" :style="gridStyle">
-          <div v-for="{ x, y, device }, i in coordinates" :key="i" class="device"
+          <div v-for="({ x, y, device }, i) in devicePositions" :key="i" class="device"
               :class="{ selected: device, local: isLocal(x, y) }"
-              :style="deviceStyle(x, y, device)"
+              :style="device && deviceStyle(x, y, device)"
               @click.stop="select(x, y)">
             <template v-if="device">
               <div class="screen"></div>
@@ -50,34 +50,35 @@ export default {
       'top',
       'width',
     ]),
-    coordinates() {
-      const coordinates = [];
+    device() { return this.findById(this.id); },
+    devicePositions() {
+      const devices = [];
       for (let y = this.top - 1; y < this.bottom + 2; ++y) {
         for (let x = this.left - 1; x < this.right + 2; ++x) {
-          coordinates.push({ x, y, device: this.findByPosition(x, y) });
+          devices.push({ x, y, device: this.findByPosition(x, y) });
         }
       }
-      return coordinates;
+      return devices;
     },
     gridStyle() {
       return { gridTemplateColumns: 'auto '.repeat(this.width + 2) };
     },
     deviceStyle() {
-      return (x, y, device) => device ? {
+      return (x, y, device) => ({
         minWidth: `${Math.round(SCALE * device.deviceWidth)}mm`,
         minHeight: `${Math.round(SCALE * device.deviceHeight)}mm`,
         alignSelf: y >= (this.bottom + this.top) / 2 ? 'start' : 'end',
         justifySelf: x >= (this.right + this.left) / 2 ? 'start' : 'end',
-      } : {};
+      });
     },
   },
   mounted() {
     window.onresize = () => this.updateDeviceInfo();
     this.callbacks = this.client.createCallbacks({
-      $join: () => this.client.send('config:request'),
-      ['config:finish']: () => this.$router.push('/'),
+      $join: () => this.client.send('config:open'),
+      ['config:finish']: () => this.$router.push({ name: 'home' }),
     });
-    this.client.send('config:request');
+    this.client.send('config:open');
   },
   beforeDestroy() {
     delete window.onresize;
@@ -86,20 +87,24 @@ export default {
   methods: {
     ...mapMutations(['reset']),
     select(x, y) {
-      this.$store.commit('select', {
-        x, y,
-        id: this.id,
-        deviceWidth: this.deviceWidth,
-        deviceHeight: this.deviceHeight,
-      });
-      this.client.send('config:selection', this.$store.state.config.selection);
+      const existing = this.findByPosition(x, y);
+      if (existing) {
+        if (existing.id === this.id) {
+          this.$store.commit('deselect', this.id);
+          this.$store.commit('removePlayers', this.id);
+        }
+      } else {
+        const { id, deviceWidth, deviceHeight } = this;
+        this.$store.commit('select', { x, y, id, deviceWidth, deviceHeight });
+        this.client.send('config:selection', this.$store.state.config.selection);
+      }
     },
     isLocal(x, y) {
       const selected = this.findById(this.id);
       return selected && selected.x === x && selected.y === y;
     },
     finish() {
-      this.$router.push('/');
+      this.$router.push({ name: 'home' });
       this.client.send('config:finish');
     },
     updateDeviceInfo() {

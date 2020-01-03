@@ -1,33 +1,33 @@
 <template>
   <div class="home">
-    <Achtung :client="client" :class="{ blur }"/>
+    <Achtung v-if="id && device" :client="client" :class="{ blur }"/>
+    <DeviceForm v-else-if="id" :client="client" :class="{ blur }"/>
+    <div class="joining" v-else>
+      <span>Joining session...</span>
+    </div>
     <router-view/>
   </div>
 </template>
 
 <script>
-import ImageFragment from '@/components/ImageFragment'
-import VideoFragment from '@/components/VideoFragment'
 import Achtung from '@/views/Achtung'
+import DeviceForm from '@/views/DeviceForm'
 import { mapState, mapGetters } from 'vuex'
 
 export default {
   name: 'home',
-  components: { Achtung, ImageFragment, VideoFragment },
+  components: { Achtung, DeviceForm },
   props: {
     client: Object,
   },
   computed: {
     blur() { return this.$route.name === 'config'; },
+    ...mapState(['id']),
+    ...mapGetters(['findById']),
+    device() { return this.findById(this.id); },
   },
 }
 </script>
-
-<style>
-html, body {
-  background: #333;
-}
-</style>
 
 <style lang="scss" scoped>
 .home {
@@ -36,6 +36,12 @@ html, body {
   background: black;
   color: white;
   font-family: "Times New Roman", Times, serif;
+  display: flex;
+}
+.joining {
+  flex: 1;
+  align-self: center;
+  font-size: 20px;
 }
 .blur {
   filter: blur(5px);

@@ -25,7 +25,7 @@ function sendParams(client, store) {
 
 function createCallbacks(client, store) {
   return {
-    $connected: id => store.commit('setId', id),
+    $connected: (id, session) => store.commit('setId', { id, session }),
     $join: () => sendParams(client, store),
     ['params']: params => store.commit('setUrlParams', params), 
   };
@@ -39,6 +39,7 @@ export default client => {
     },
     state: {
       id: null,
+      session: null,
       params: {
         title: null,
         text: null,
@@ -46,8 +47,9 @@ export default client => {
       },
     },
     mutations: {
-      setId(state, id) {
+      setId(state, { id, session }) {
         state.id = id;
+        state.session = session;
       },
       setUrlParams(state, params) {
         state.params = params;

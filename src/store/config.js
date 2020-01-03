@@ -1,7 +1,7 @@
 const findById = (selection, id) => selection.find(device => device.id === id);
 const findByPosition = (selection, x, y) => selection.find(device => device.x === x && device.y === y);
 
-function sendConfig(client, store, peer) {
+function sendConfig(client, store) {
   if (store.state.config.selection.length) {
     client.send('config:selection', store.state.config.selection);
   }
@@ -9,13 +9,13 @@ function sendConfig(client, store, peer) {
 
 export function createConfigCallbacks(client, store) {
   return {
-    $join: peer => sendConfig(client, store, peer),
+    $join: () => sendConfig(client, store),
     $left: peer => store.commit('deselect', peer.id),
     ['config:selection']: selection => store.commit('setSelection', selection),
   };
 }
 
-export default client => ({
+export default () => ({
   state: {
     selection: [],
   },
@@ -39,12 +39,10 @@ export default client => ({
       state.selection = [];
     },
     select(state, { x, y, id, deviceWidth, deviceHeight }) {
-      if (!findByPosition(state.selection, x, y)) {
-        state.selection = [
-          ...state.selection.filter(device => device.id !== id),
-          { x, y, id, deviceWidth, deviceHeight }
-        ];
-      }
+      state.selection = [
+        ...state.selection.filter(device => device.id !== id),
+        { x, y, id, deviceWidth, deviceHeight }
+      ];
     },
     deselect(state, id) {
       state.selection = [...state.selection.filter(device => device.id !== id)];
